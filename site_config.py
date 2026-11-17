@@ -258,11 +258,13 @@ META_DESC_MAX_CHARS = 160
 # ------------------------------------------------------------------------------
 # atoyanlaw.com specifics: the "WP Content Autopilot Bridge" plugin (already active on the site)
 # exposes autopilot/v1 endpoints that this publisher uses:
-#   POST /wp-json/autopilot/v1/accordion    -> creates an Easy Accordion FAQ (same look as existing posts)
+#   GET  /wp-json/autopilot/v1/accordion/<id> -> FAQ data of an Easy Accordion (used by repair_faq.py)
 #   POST /wp-json/autopilot/v1/head-script  -> FAQ JSON-LD into "Insert Script to <head>"
 #   POST /wp-json/autopilot/v1/purge-cache  -> clears WP Rocket for the post
 # ------------------------------------------------------------------------------
-USE_EASY_ACCORDION = True
+# Off: the theme prints shortcodes in posts as raw text, so the FAQ is written into the post as HTML
+# (same card look; opened/closed by the bridge plugin's script). See repair_faq.py for old posts.
+USE_EASY_ACCORDION = False
 ACCORDION_PATH = "/wp-json/autopilot/v1/accordion"
 HEAD_SCRIPT_PATH = "/wp-json/autopilot/v1/head-script"
 PURGE_CACHE_PATH = "/wp-json/autopilot/v1/purge-cache"

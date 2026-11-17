@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import json
 import requests
@@ -114,32 +115,45 @@ def upload_image_to_wordpress(image_path: str, title: str, post_id: int = None):
     return None, None
 
 
-def generate_faq_accordion_html(faq_items: list) -> str:
+def generate_faq_accordion_html(faq_items: list, uid: str = None) -> str:
     """
-    Builds a styled <details>/<summary> FAQ accordion (no plugin required).
+    Builds the FAQ as plain HTML in the same card style as the site's Easy Accordion FAQs.
+
+    atoyanlaw.com's theme does NOT run shortcodes in blog posts (an [sp_easyaccordion] shortcode shows up
+    as raw text), and Easy Accordion's CSS is not loaded there, so everything is inline: styles on each
+    element, closed answers hidden with display:none. The "WP Content Autopilot Bridge" plugin's footer
+    script opens/closes `.ea-header` cards inside `.sp-ea-single`, so no other script is needed.
+    Answers may be plain text or HTML.
     """
     if not faq_items:
         return ""
+    uid = uid or str(random.randint(100000, 999999))
+    card = 'margin-bottom: 10px; border: 1px solid #e2e2e2; background: #eee;'
+    head = 'margin: 0; padding: 0; font-size: 18px; line-height: 1.5;'
+    link = ('display: block; padding: 15px; color: #444; font-weight: 600; text-decoration: none; cursor: pointer;')
+    icon = 'display: inline-block; width: 18px; margin-right: 6px; font-style: normal; color: #444;'
+    body = 'background: #fff; color: #444; padding: 15px; font-size: 16px; line-height: 1.6;'
 
-    html = (
-        '\n\n<div class="faq-accordion" style="margin-top: 35px; margin-bottom: 25px; font-family: inherit;">\n'
-        f'  {cfg.H2_OPEN_TAG}{cfg.FAQ_HEADING}</h2>\n'
-    )
-    for idx, item in enumerate(faq_items, start=1):
-        q = item.get("question", "")
-        a = item.get("answer", "")
+    html = f'<div id="sp-ea-{uid}" class="sp-ea-one sp-easy-accordion atoyan-inline-faq">'
+    for n, item in enumerate(faq_items):
+        q = str(item.get("question", "")).strip()
+        a = str(item.get("answer", "")).strip()
+        if not a.startswith("<"):
+            a = f"<p>{a}</p>"
+        is_open = n == 0
+        cid = f"{uid}{n}"
         html += (
-            '  <details style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 10px; overflow: hidden;">\n'
-            '    <summary style="background: #f5f5f5; color: #222222; font-weight: bold; font-size: 16px; padding: 15px; cursor: pointer; outline: none;">\n'
-            f'      {idx}. {q}\n'
-            '    </summary>\n'
-            '    <div style="background: #ffffff; color: #444444; padding: 15px; font-size: 15px; line-height: 1.6; border-top: 1px solid #eeeeee;">\n'
-            f'      {a}\n'
-            '    </div>\n'
-            '  </details>\n'
+            f'<div class="ea-card{" ea-expand" if is_open else ""} sp-ea-single" style="{card}">'
+            f'<h3 class="ea-header" style="{head}"><a class="{"" if is_open else "collapsed"}" id="ea-header-{cid}" '
+            f'role="button" aria-controls="collapse{cid}" href="#" aria-expanded="{"true" if is_open else "false"}" '
+            f'tabindex="0" style="{link}"><i aria-hidden="true" class="ea-expand-icon" style="{icon}">'
+            f'{"−" if is_open else "+"}</i> {q}</a></h3>'
+            f'<div class="sp-collapse spcollapse{" show" if is_open else ""}" id="collapse{cid}" role="region" '
+            f'aria-labelledby="ea-header-{cid}" style="display: {"block" if is_open else "none"};">'
+            f'<div class="ea-body" style="{body}">{a}</div></div></div>'
         )
-    html += '</div>\n'
-    return html
+    html += '</div>'
+    return f'\n{cfg.H2_OPEN_TAG}{cfg.FAQ_HEADING}</h2>\n{html}\n'
 
 
 def generate_faq_schema_jsonld(faq_items: list) -> str:
@@ -237,18 +251,19 @@ def build_post_body(title: str, content: str, faq_items: list = None, extra_html
     """
     Article + CTA box + FAQ (Easy Accordion shortcode, or a <details> accordion as fallback)
     + optional extra HTML (news source line) + legal disclaimer. Returns (body, faq_mode).
+    The FAQ is inline HTML by default (see generate_faq_accordion_html).
     """
     body = re.sub(r'<script\b[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE).rstrip()
     body += f"\n\n{cfg.CTA_HTML}\n"
     faq_mode = "none"
     if faq_items:
-        shortcode = create_faq_accordion(title, faq_items)
+        shortcode = create_faq_accordion(title, faq_items)  # only if USE_EASY_ACCORDION (off: theme skips shortcodes)
         if shortcode:
             body += f"\n{cfg.H2_OPEN_TAG}{cfg.FAQ_HEADING}</h2>\n{shortcode}\n"
             faq_mode = "easy-accordion"
         else:
             body += generate_faq_accordion_html(faq_items)
-            faq_mode = "details"
+            faq_mode = "inline-accordion"
     if extra_html:
         body += f"\n{extra_html}\n"
     body += f"\n{cfg.MEDICAL_DISCLAIMER_HTML}\n"

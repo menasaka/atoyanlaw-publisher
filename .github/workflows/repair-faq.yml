@@ -1,0 +1,36 @@
+name: Repair FAQ in posts
+
+# Replaces [sp_easyaccordion id="N"] shortcodes (shown as raw text by the theme) with the inline HTML FAQ.
+on:
+  workflow_dispatch:
+    inputs:
+      posts:
+        description: "Post IDs, comma-separated (e.g. 4942,4938)"
+        required: true
+      dry_run:
+        description: "Only show what would change"
+        type: boolean
+        default: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install packages
+        run: pip install openai requests Pillow python-dotenv
+      - name: Repair
+        env:
+          AUTOMATION: ${{ secrets.AUTOMATION }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          INPUT_POSTS: ${{ github.event.inputs.posts }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          ARGS="--posts $INPUT_POSTS"
+          if [ "$INPUT_DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          python repair_faq.py $ARGS
