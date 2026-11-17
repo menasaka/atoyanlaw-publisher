@@ -121,3 +121,76 @@ def pick_medical_headlines(items: list, limit: int = 10) -> list:  # name kept f
     except Exception as e:
         print(f"Notice: OpenAI headline selection failed ({e}); using keyword filter.")
         return _keyword_filter(candidates)[:limit]
+
+
+# ------------------------------------------------------------------------------
+# Direct link to the original article
+# Google News RSS links are news.google.com redirects. The post must link the publisher directly,
+# so the headline is looked up in Bing's public RSS search, whose results carry the real URL.
+# ------------------------------------------------------------------------------
+BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"}
+_REDIRECT_HOSTS = ("news.google.", "bing.com", "msn.com", "yahoo.com")
+
+
+def _words(text: str) -> set:
+    return set(re.findall(r"[a-z0-9]+", (text or "").lower())) - {"the", "a", "an", "of", "to", "in", "for", "and", "on", "over", "by"}
+
+
+def _host(url: str) -> str:
+    from urllib.parse import urlparse
+    return urlparse(url).netloc.lower().removeprefix("www.")
+
+
+def _bing_rss(url: str) -> list:
+    """Returns [(title, real_url, source)] from a Bing RSS search."""
+    from urllib.parse import urlparse, parse_qs
+    import html as _html
+    try:
+        res = requests.get(url, headers=BROWSER_HEADERS, timeout=20)
+        if res.status_code != 200:
+            return []
+        root = ET.fromstring(res.content)
+    except Exception as e:
+        print(f"Notice: Bing lookup failed ({e})")
+        return []
+    out = []
+    for it in root.findall(".//item"):
+        link = _html.unescape(it.findtext("link") or "")
+        real = parse_qs(urlparse(link).query).get("url", [link])[0]  # Bing News wraps it as ?url=
+        src = ""
+        for child in it:
+            if child.tag.lower().endswith("source"):
+                src = (child.text or "").strip()
+        out.append((_html.unescape(it.findtext("title") or ""), real, src))
+    return out
+
+
+def find_direct_link(item: dict) -> str:
+    """
+    Finds the publisher's own URL for a Google News item (never a Google/Bing/MSN redirect).
+    Returns "" if no confident match is found.
+    """
+    headline = item["headline"]
+    want = _words(headline)
+    if not want:
+        return ""
+    candidates = _bing_rss(f"https://www.bing.com/news/search?q={quote_plus(headline)}&format=rss")
+    if not candidates and item.get("source"):
+        candidates = _bing_rss(f"https://www.bing.com/news/search?q={quote_plus(headline + ' ' + item['source'])}&format=rss")
+    best, best_score = "", 0.0
+    source_words = _words(item.get("source", ""))
+    for title, url, src in candidates:
+        if not url.startswith("http") or any(h in _host(url) for h in _REDIRECT_HOSTS):
+            continue
+        got = _words(title)
+        score = len(want & got) / len(want)
+        # Same outlet (by name or domain) is a strong sign it's the same story.
+        if source_words and (source_words & _words(src) or any(w in _host(url) for w in source_words if len(w) > 3)):
+            score += 0.15
+        if score > best_score:
+            best, best_score = url, score
+    if best_score >= 0.75:
+        print(f"   Direct link: {best} (match {best_score:.2f})")
+        return best
+    print(f"   No direct link found for: {headline} (best match {best_score:.2f})")
+    return ""

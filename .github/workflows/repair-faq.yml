@@ -1,6 +1,6 @@
-name: Repair FAQ in posts
+name: Repair posts (FAQ + source links)
 
-# Replaces [sp_easyaccordion id="N"] shortcodes (shown as raw text by the theme) with the inline HTML FAQ.
+# Replaces [sp_easyaccordion] shortcodes with the inline FAQ and Google News source links with direct links.
 on:
   workflow_dispatch:
     inputs:

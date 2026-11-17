@@ -1,5 +1,8 @@
 """
-Replaces [sp_easyaccordion id="N"] shortcodes in blog posts with the inline HTML FAQ.
+Repairs published blog posts:
+1. Replaces [sp_easyaccordion id="N"] shortcodes with the inline HTML FAQ.
+2. Replaces news.google.com redirect links in the "Source:" line with the publisher's direct URL
+   (nofollow), found with news.find_direct_link.
 
 Why: atoyanlaw.com's theme does not run shortcodes in blog posts, so visitors see the raw
 "[sp_easyaccordion id=...]" text instead of the FAQ. The questions and answers are read from the
@@ -15,10 +18,13 @@ import os
 import re
 import sys
 
+import html
+
 import requests
 
 from autopublish import load_combined_secret  # noqa: F401  (loads the AUTOMATION secret on import)
 import site_config as cfg
+import news
 from wp_publisher import _wp, DEFAULT_HEADERS, generate_faq_accordion_html, purge_cache
 
 SHORTCODE_RE = re.compile(r'\[sp_easyaccordion\s+id=["“”″]?(\d+)["“”″]?\s*\]')
@@ -40,6 +46,24 @@ def accordion_faqs(acc_id: int) -> list:
     return items
 
 
+SOURCE_RE = re.compile(
+    r'<a href="(https://news\.google\.com/[^"]+)"[^>]*>(.*?)</a>\s*\(([^)]*)\)', re.S)
+
+
+def fix_source_links(post_id: int, raw: str) -> str:
+    def repl(m):
+        headline = html.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        source = html.unescape(m.group(3)).strip()
+        direct = news.find_direct_link({"headline": headline, "source": source})
+        if not direct:
+            print(f"   Post {post_id}: no direct link found for '{headline}'; source link left as is.")
+            return m.group(0)
+        print(f"   Post {post_id}: source link -> {direct}")
+        return (f'<a href="{html.escape(direct)}" target="_blank" rel="nofollow noopener noreferrer">'
+                f'{m.group(2)}</a> ({m.group(3)})')
+    return SOURCE_RE.sub(repl, raw)
+
+
 def repair(post_id: int, dry_run: bool) -> bool:
     wp_url, auth = _wp()
     res = requests.get(f"{wp_url}/wp-json/wp/v2/posts/{post_id}", params={"context": "edit"},
@@ -48,12 +72,12 @@ def repair(post_id: int, dry_run: bool) -> bool:
         print(f"❌ Post {post_id}: HTTP {res.status_code} {res.text[:200]}")
         return False
     raw = res.json()["content"]["raw"]
-    matches = list(SHORTCODE_RE.finditer(raw))
-    if not matches:
-        print(f"✔ Post {post_id}: no Easy Accordion shortcode, nothing to do.")
+    new = fix_source_links(post_id, raw)
+    matches = list(SHORTCODE_RE.finditer(new))
+    if not matches and new == raw:
+        print(f"✔ Post {post_id}: nothing to repair.")
         return True
 
-    new = raw
     heading = f"{cfg.H2_OPEN_TAG}{cfg.FAQ_HEADING}</h2>"
     for m in matches:
         faqs = accordion_faqs(int(m.group(1)))

@@ -111,9 +111,12 @@ def already_covered(item: dict, posts: list) -> bool:
 
 
 def source_html(item: dict) -> str:
+    link = item["link"]
+    if "news.google." in link:  # safety net: never publish a Google redirect link
+        raise ValueError(f"Refusing to publish a Google News redirect as the source link: {link}")
     return (
         f'<p class="{SOURCE_MARKER}" style="font-size: 14px; color: #555555; margin-top: 25px;">'
-        f'<strong>Source:</strong> <a href="{html.escape(item["link"])}" target="_blank" rel="nofollow noopener">'
+        f'<strong>Source:</strong> <a href="{html.escape(link)}" target="_blank" rel="nofollow noopener noreferrer">'
         f'{html.escape(item["headline"])}</a> ({html.escape(item["source"])})</p>'
     )
 
@@ -127,9 +130,15 @@ def pick_next_headline(posts: list) -> dict:
         for p in picks:
             print(f"   - [{p['published']:%m-%d %H:%M}] {p['headline']} ({p['source']})")
         for p in picks:
-            if not already_covered(p, posts):
-                return p
-            print(f"   (already covered: {p['headline']})")
+            if already_covered(p, posts):
+                print(f"   (already covered: {p['headline']})")
+                continue
+            # The Source link must go straight to the publisher (no news.google.com redirect),
+            # so a story without a findable direct URL is skipped.
+            direct = news.find_direct_link(p)
+            if direct:
+                return dict(p, link=direct, google_link=p["link"])
+            print(f"   (skipped, no direct link: {p['headline']})")
     return None
 
 
@@ -192,7 +201,8 @@ def main() -> int:
     if not item:
         print("No new employment-law headline found. Nothing published.")
         return 0
-    print(f"\n✅ Picked: {item['headline']} ({item['source']})\n   Article title: {item['title']}")
+    print(f"\n✅ Picked: {item['headline']} ({item['source']})\n   Article title: {item['title']}"
+          f"\n   Source link: {item['link']}")
     if args.dry_run:
         return 0
 
