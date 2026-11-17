@@ -335,6 +335,9 @@ Keep ONLY headlines that matter to California WORKERS and their rights at work: 
 federal employment laws and rules, court rulings, agency actions (Civil Rights Department, Labor Commissioner,
 EEOC, Cal/OSHA, DOL), lawsuits or settlements about discrimination, harassment, retaliation, wrongful
 termination, wages, overtime, breaks, leave, misclassification, workplace safety or workers' compensation.
+The story must happen in California or be about a federal law, rule, agency action or court ruling that applies
+to California workers. REJECT lawsuits, accidents or employer news from other states (check the place names,
+outlet and agency: e.g. an Ohio or Texas employer, a state labor department outside California).
 REJECT: press releases or marketing by other law firms (e.g. \"attorneys file lawsuit\" on PR Newswire),
 stories mainly about people or crimes unrelated to work rights, celebrity gossip, stock or earnings news,
 union politics without a legal angle, product promotions, opinion pieces, and non-English headlines.
