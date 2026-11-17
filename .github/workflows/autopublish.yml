@@ -54,6 +54,7 @@ jobs:
           INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           ARGS=""
-          case "$INPUT_SLOT" in 1|2) ARGS="$ARGS --slot $INPUT_SLOT" ;; esac
+          SLOT=$(printf "%s" "$INPUT_SLOT" | tr -cd "0-9")   # accepts "1", "slot 1", "slot = 1"
+          case "$SLOT" in 1|2) ARGS="$ARGS --slot $SLOT" ;; esac
           if [ "$INPUT_DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           python autopublish.py $ARGS
